@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,10 +14,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PineFinance – Money Manager",
-  description: "A personal finance dashboard by Ezwan. Track income, expenses, and daily tasks all in one place.",
+  title: "Pine – Money Manager",
+  description:
+    "A personal finance dashboard by Ezwan. Track income, expenses, and daily tasks all in one place.",
   icons: {
-    icon: "/icon.svg",
+    icon: "/icon-app.png",
   },
 };
 
@@ -30,7 +32,21 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <Toaster
+          position="top-right"
+          richColors
+          expand={false}
+          closeButton
+          toastOptions={{
+            style: {
+              borderRadius: "16px",
+              fontFamily: "inherit",
+            },
+          }}
+        />
+      </body>
     </html>
   );
 }

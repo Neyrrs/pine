@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Wallet,
@@ -9,24 +9,39 @@ import {
   PieChart as PieChartIcon,
   CheckSquare,
   PlusCircle,
-  Settings,
   GitBranch,
 } from "lucide-react";
-import Footer from "./Footer";
+import { createClient } from "@/utils/supabase/client";
+import { User } from "@supabase/supabase-js";
 
 interface SidebarProps {
   currentPath?: string;
 }
 
 export default function Sidebar({ currentPath = "/" }: SidebarProps) {
+  const [user, setUser] = useState<User | null>(null);
+  const supabase = createClient();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+  }, []);
+
+  const displayName =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email?.split("@")[0] ||
+    "User";
+
+  const avatarUrl = user?.user_metadata?.avatar_url;
+
   return (
     <>
       {/* Desktop Sidebar */}
       <aside className="w-64 bg-white border-r border-slate-200 hidden md:flex flex-col shrink-0 relative z-10 hover:shadow-lg transition-shadow">
         <div className="h-16 flex items-center px-6 border-b border-slate-100">
           <div className="flex items-center gap-2 text-primary-600 font-bold text-xl">
-            <Wallet className="w-6 h-6" />
-            <span>PineFinance</span>
+            <img src="/icon-app.png" alt="Pine Logo" className="w-6 h-6 object-contain" />
+            <span>Pine</span>
           </div>
         </div>
 
@@ -65,17 +80,33 @@ export default function Sidebar({ currentPath = "/" }: SidebarProps) {
 
         <div className="p-4 border-t border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="flex flex-col gap-2">
+            {/* Avatar */}
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={displayName}
+                className="w-9 h-9 rounded-full border-2 border-slate-100 shrink-0"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-sm font-bold shrink-0">
+                {displayName.charAt(0).toUpperCase()}
+              </div>
+            )}
+
+            {/* Name + GitHub */}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-slate-800 truncate">
+                {displayName}
+              </p>
               <Link
                 href="https://github.com/Neyrrs"
-                className="flex items-center gap-2 font-bold"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 transition-colors mt-0.5"
               >
-                <GitBranch className="w-5 h-5" />
-                Neyrrs
+                <GitBranch className="w-3 h-3" />
+                <span>Neyrrs</span>
               </Link>
-              <p className="text-xs font-medium">
-                © {new Date().getFullYear()} Ezwan All rights reserved
-              </p>
             </div>
           </div>
         </div>

@@ -5,47 +5,71 @@ import Sidebar from "../../components/Sidebar";
 import Header from "../../components/Header";
 import { useDashboardData } from "../../hooks/useDashboardData";
 import { PlusCircle, ShoppingCart, TrendingUp } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
 
 export default function ManageDataPage() {
   const [isClient, setIsClient] = useState(false);
   const { addTransaction } = useDashboardData();
-
-  const [successMsg, setSuccessMsg] = useState("");
 
   // Finance form state
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<"income" | "expense">("expense");
   const [date, setDate] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
-    // default date to today
     setDate(new Date().toISOString().split("T")[0]);
   }, []);
 
   if (!isClient) return null;
 
-  const handleFinanceSubmit = (e: React.FormEvent) => {
+  const handleFinanceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !amount) return;
 
-    addTransaction({
-      name,
-      amount: parseFloat(amount),
-      type,
-      date: new Date(date).toISOString(), // parse the date string Back to ISO
-    });
+    if (!name.trim()) {
+      toast.error("Please enter a transaction name.");
+      return;
+    }
+    if (!amount || parseFloat(amount) <= 0) {
+      toast.error("Please enter a valid amount greater than 0.");
+      return;
+    }
+    if (!date) {
+      toast.error("Please select a date.");
+      return;
+    }
 
-    setSuccessMsg(
-      `Successfully added ${type === "income" ? "income" : "expense"}: ${name}`,
-    );
+    setLoading(true);
+    const toastId = toast.loading("Saving transaction...");
 
-    // Reset form
-    setName("");
-    setAmount("");
-    setTimeout(() => setSuccessMsg(""), 3000);
+    try {
+      await addTransaction({
+        name,
+        amount: parseFloat(amount),
+        type,
+        date: new Date(date).toISOString(),
+      });
+
+      toast.success(
+        `${type === "income" ? "Pemasukan" : "Pengeluaran"} added!`,
+        {
+          id: toastId,
+          description: `"${name}" — Rp ${parseFloat(amount).toLocaleString("id-ID")} saved successfully.`,
+        }
+      );
+
+      // Reset form
+      setName("");
+      setAmount("");
+      setDate(new Date().toISOString().split("T")[0]);
+    } catch {
+      toast.error("Something went wrong. Please try again.", { id: toastId });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -63,25 +87,10 @@ export default function ManageDataPage() {
           transition={{ duration: 0.4 }}
           className="flex-1 px-4 md:px-8 pb-24 md:pb-12 z-10 mx-auto w-full"
         >
-          <AnimatePresence>
-            {successMsg && (
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="mb-6 p-4 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-200 font-semibold"
-              >
-                {successMsg}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           <div className="bg-white rounded-3xl p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
             <div className="flex items-center gap-3 mb-6 border-b border-slate-100 pb-4">
               <PlusCircle className="w-6 h-6 text-primary-600" />
-              <h3 className="text-xl font-bold text-slate-800">
-                Add New Entry
-              </h3>
+              <h3 className="text-xl font-bold text-slate-800">Add New Entry</h3>
             </div>
 
             <form onSubmit={handleFinanceSubmit} className="space-y-6">
@@ -90,7 +99,7 @@ export default function ManageDataPage() {
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
                   Type of Entry
                 </label>
-                <div className="grid md:grid-rows-1 grid-rows-2 md:grid-cols-2  gap-4">
+                <div className="grid md:grid-rows-1 grid-rows-2 md:grid-cols-2 gap-4">
                   <button
                     type="button"
                     onClick={() => setType("expense")}
@@ -126,7 +135,6 @@ export default function ManageDataPage() {
                   </label>
                   <input
                     type="text"
-                    required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Groceries, Salary, Electric Bill"
@@ -137,16 +145,15 @@ export default function ManageDataPage() {
                 {/* Amount */}
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-slate-700">
-                    Amount ($)
+                    Amount (Rp)
                   </label>
                   <input
                     type="number"
-                    required
-                    min="0.01"
-                    step="0.01"
+                    min="1"
+                    step="1"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0.00"
+                    placeholder="0"
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-shadow font-mono"
                   />
                 </div>
@@ -154,12 +161,9 @@ export default function ManageDataPage() {
 
               {/* Date */}
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-700">
-                  Date
-                </label>
+                <label className="text-sm font-semibold text-slate-700">Date</label>
                 <input
                   type="date"
-                  required
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                   className="w-full md:w-1/2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-shadow text-slate-600"
@@ -168,32 +172,15 @@ export default function ManageDataPage() {
 
               <button
                 type="submit"
-                className="w-full py-4 bg-primary-600 hover:bg-primary-700 text-white font-bold rounded-2xl shadow-lg shadow-primary-200 transition-all hover:shadow-primary-300 transform hover:-translate-y-0.5"
+                disabled={loading}
+                className="w-full py-4 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white font-bold rounded-2xl shadow-lg shadow-primary-200 transition-all hover:shadow-primary-300 transform hover:-translate-y-0.5"
               >
-                Save {type === "income" ? "Pemasukan" : "Pengeluaran"}
+                {loading ? "Saving..." : `Save ${type === "income" ? "Pemasukan" : "Pengeluaran"}`}
               </button>
             </form>
           </div>
         </motion.div>
       </main>
-
-      {/* Global styles for custom scrollbar hidden in normal but usable */}
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background-color: #cbd5e1;
-          border-radius: 20px;
-        }
-      `,
-        }}
-      />
     </div>
   );
 }

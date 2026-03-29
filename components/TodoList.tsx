@@ -1,52 +1,96 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, Check, CalendarIcon } from 'lucide-react';
-import { useLocalStorage } from '../hooks/useLocalStorage';
+import { createClient } from '@/utils/supabase/client';
+import { User } from '@supabase/supabase-js';
+import { toast } from 'sonner';
 
 export interface TodoItem {
-  id: number;
-  name: string;
-  date: string;
-  deadline: string;
+  id: string; // Updated to match Supabase UUID
+  text: string;
   completed: boolean;
+  created_at?: string;
 }
 
 export default function TodoList() {
-  const initialTodos: TodoItem[] = [];
-
-  const [todos, setTodos] = useLocalStorage<TodoItem[]>("pine-finance-todos-v3", initialTodos);
+  const [todos, setTodos] = useState<TodoItem[]>([]);
   const [newTodoName, setNewTodoName] = useState("");
-  const [newTodoDeadline, setNewTodoDeadline] = useState("");
+  const [user, setUser] = useState<User | null>(null);
+  
+  const supabase = createClient();
 
-  const toggleTodo = (id: number) => {
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+      if (data.user) {
+        fetchTodos(data.user.id);
+      }
+    });
+  }, []);
+
+  const fetchTodos = async (userId: string) => {
+    const { data } = await supabase
+      .from('todos')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (data) setTodos(data);
+  };
+
+  const toggleTodo = async (id: string, currentStatus: boolean) => {
+    // Optimistic UI update
     setTodos(todos.map(todo => todo.id === id ? { ...todo, completed: !todo.completed } : todo));
+    
+    if (!user) return;
+    const { error } = await supabase.from('todos').update({ completed: !currentStatus }).eq('id', id);
+    if (error) {
+      // Revert on failure
+      setTodos(todos.map(todo => todo.id === id ? { ...todo, completed: currentStatus } : todo));
+      toast.error('Failed to update task.');
+    } else {
+      toast.success(!currentStatus ? 'Task completed! 🎉' : 'Task reopened.');
+    }
   };
 
-  const addTodo = (e: React.FormEvent) => {
+  const addTodo = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTodoName.trim()) return;
+    if (!newTodoName.trim()) {
+      toast.error('Please enter a task name.');
+      return;
+    }
+    if (!user) return;
     
-    // Default deadline to 1 day from now if not specified
-    const deadlineVal = newTodoDeadline 
-      ? new Date(newTodoDeadline).toISOString() 
-      : new Date(Date.now() + 86400000).toISOString();
-
-    setTodos([...todos, { 
-      id: Date.now(), 
-      name: newTodoName, 
-      date: new Date().toISOString(), 
-      deadline: deadlineVal,
-      completed: false 
-    }]);
+    const toastId = toast.loading('Adding task...');
+    const { data, error } = await supabase
+      .from('todos')
+      .insert([{ text: newTodoName, completed: false, user_id: user.id }])
+      .select()
+      .single();
     
-    setNewTodoName("");
-    setNewTodoDeadline("");
+    if (data && !error) {
+      setTodos([data, ...todos]);
+      toast.success('Task added!', { id: toastId, description: newTodoName });
+    } else {
+      toast.error('Failed to add task.', { id: toastId });
+    }
+    
+    setNewTodoName('');
   };
 
-  const deleteTodo = (id: number) => {
+  const deleteTodo = async (id: string) => {
+    if (!user) return;
+    const todo = todos.find(t => t.id === id);
     setTodos(todos.filter(todo => todo.id !== id));
+    const { error } = await supabase.from('todos').delete().eq('id', id);
+    if (error) {
+      toast.error('Failed to delete task.');
+      if (todo) setTodos(prev => [todo, ...prev]);
+    } else {
+      toast.success('Task deleted.', { description: todo?.text });
+    }
   };
 
   return (
@@ -75,7 +119,7 @@ export default function TodoList() {
             >
               <div className="flex items-center gap-3 overflow-hidden">
                 <button 
-                  onClick={() => toggleTodo(todo.id)}
+                  onClick={() => toggleTodo(todo.id, todo.completed)}
                   className={`shrink-0 w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
                     todo.completed ? 'bg-primary-500 border-primary-500' : 'border-slate-300 hover:border-primary-500'
                   }`}
@@ -84,12 +128,8 @@ export default function TodoList() {
                 </button>
                 <div className="flex flex-col flex-1 overflow-hidden">
                   <span className={`text-sm truncate transition-all ${todo.completed ? 'text-slate-400 line-through' : 'text-slate-700 font-medium'}`}>
-                    {todo.name}
+                    {todo.text}
                   </span>
-                  <div className={`flex items-center gap-1 text-[10px] mt-0.5 ${todo.completed ? 'text-slate-300' : 'text-slate-400'}`}>
-                    <CalendarIcon className="w-3 h-3" />
-                    <span>Due: {new Date(todo.deadline).toLocaleDateString()}</span>
-                  </div>
                 </div>
               </div>
               <button 
@@ -109,29 +149,21 @@ export default function TodoList() {
       </div>
 
       <form onSubmit={addTodo} className="mt-auto bg-slate-50 p-3 rounded-2xl border border-slate-100">
-        <div className="space-y-2 mb-2">
+        <div className="flex items-center gap-2">
           <input 
             type="text" 
             value={newTodoName}
             onChange={(e) => setNewTodoName(e.target.value)}
-            placeholder="Task name..." 
+            placeholder="Add a new task..." 
             className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
-          <div className="flex items-center gap-2">
-            <input 
-              type="date" 
-              value={newTodoDeadline}
-              onChange={(e) => setNewTodoDeadline(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none text-slate-500 focus:ring-2 focus:ring-primary-500"
-            />
-            <button 
-              type="submit"
-              disabled={!newTodoName.trim()}
-              className="p-2 shrink-0 bg-primary-600 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary-700 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
-          </div>
+          <button 
+            type="submit"
+            disabled={!newTodoName.trim()}
+            className="p-2 shrink-0 bg-primary-600 text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary-700 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
         </div>
       </form>
     </motion.div>

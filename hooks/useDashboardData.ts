@@ -1,7 +1,9 @@
-import { useLocalStorage } from './useLocalStorage';
+import { useState, useEffect } from 'react';
+import { createClient } from '@/utils/supabase/client';
+import { User } from '@supabase/supabase-js';
 
 export interface FinanceEntry {
-  id: number;
+  id: string; // Updated to string for UUID from Supabase
   name: string;
   type: 'income' | 'expense';
   date: string;
@@ -9,10 +11,27 @@ export interface FinanceEntry {
 }
 
 export function useDashboardData() {
-  const initialTransactions: FinanceEntry[] = [];
+  const [transactions, setTransactions] = useState<FinanceEntry[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const supabase = createClient();
 
-  const [transactions, setTransactions] = useLocalStorage<FinanceEntry[]>('pine-finance-transactions-v3', initialTransactions);
-  
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+      if (data.user) fetchTransactions(data.user.id);
+    });
+  }, []);
+
+  const fetchTransactions = async (userId: string) => {
+    const { data } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('date', { ascending: false });
+    
+    if (data) setTransactions(data);
+  };
+
   // Derived stats
   const totalEarned = transactions
     .filter(t => t.type === 'income')
@@ -22,10 +41,8 @@ export function useDashboardData() {
     .filter(t => t.type === 'expense')
     .reduce((acc, curr) => acc + curr.amount, 0);
     
-  const budgetLimit = 2500;
+  const budgetLimit = 5_000_000;
 
-  // Compute dynamic chart data by grouping into Weeks relative to current month (simplified mock logic)
-  // For a real app we'd group by actual Date/Week. Here we just mock a 4-week split based on transactions.
   const expenseData = [
     { name: "Week 1", spend: totalSpent * 0.2, earn: totalEarned * 0.2 },
     { name: "Week 2", spend: totalSpent * 0.3, earn: totalEarned * 0.3 },
@@ -33,12 +50,25 @@ export function useDashboardData() {
     { name: "Week 4", spend: totalSpent * 0.1, earn: totalEarned * 0.1 },
   ];
 
-  const addTransaction = (entry: Omit<FinanceEntry, 'id'>) => {
-    setTransactions(prev => [{ ...entry, id: Date.now() }, ...prev]);
+  const addTransaction = async (entry: Omit<FinanceEntry, 'id'>) => {
+    if (!user) return;
+    const { data, error } = await supabase
+      .from('transactions')
+      .insert([{ ...entry, user_id: user.id }])
+      .select()
+      .single();
+    
+    if (data && !error) {
+      setTransactions(prev => [data, ...prev]);
+    }
   };
 
-  const deleteTransaction = (id: number) => {
-    setTransactions(prev => prev.filter(t => t.id !== id));
+  const deleteTransaction = async (id: string) => {
+    if (!user) return;
+    const { error } = await supabase.from('transactions').delete().eq('id', id);
+    if (!error) {
+      setTransactions(prev => prev.filter(t => t.id !== id));
+    }
   };
 
   return {
