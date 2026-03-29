@@ -40,7 +40,11 @@ export default function Sidebar({ currentPath = "/" }: SidebarProps) {
       <aside className="w-64 bg-white border-r border-slate-200 hidden md:flex flex-col shrink-0 relative z-10 hover:shadow-lg transition-shadow">
         <div className="h-16 flex items-center px-6 border-b border-slate-100">
           <div className="flex items-center gap-2 text-primary-600 font-bold text-xl">
-            <img src="/icon-app.png" alt="Pine Logo" className="w-6 h-6 object-contain" />
+            <img
+              src="/icon-app.png"
+              alt="Pine Logo"
+              className="w-6 h-6 object-contain"
+            />
             <span>Pine</span>
           </div>
         </div>
@@ -105,7 +109,7 @@ export default function Sidebar({ currentPath = "/" }: SidebarProps) {
                 className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-700 transition-colors mt-0.5"
               >
                 <GitBranch className="w-3 h-3" />
-                <span>Neyrrs</span>
+                <span>Github dev repo: Neyrrs</span>
               </Link>
             </div>
           </div>
